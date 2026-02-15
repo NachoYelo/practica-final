@@ -1,0 +1,76 @@
+services:
+  # 1. Base de Datos MySQL
+  db:
+    image: mysql:8.0
+    container_name: practica_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: proyecto_futbol
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - app-network
+
+  # 2. Backend Symfony
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    container_name: practica_backend
+    volumes:
+      - ./backend:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app-network
+
+  # 3. Servidor Web Nginx (Frontend + Proxy)
+  webserver:
+    image: nginx:alpine
+    container_name: practica_webserver
+    ports:
+      - "80:80"
+    volumes:
+      # Carpeta donde Angular compila el código
+      - ./frontend/dist/frontend/browser:/var/www/html
+      # Configuración de Nginx
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # 4. Portainer (Gestión Visual)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: practica_portainer
+    ports:
+      - "9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    restart: always
+    networks:
+      - app-network
+
+  # 5. Ngrok (Salida a Internet)
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: practica_ngrok
+    restart: unless-stopped
+    command: http webserver:80
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - 4040:4040
+    networks:
+      - app-network
+
+volumes:
+  db_data:
+  portainer_data:
+
+networks:
+  app-network:
+    driver: bridge
